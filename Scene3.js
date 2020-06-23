@@ -22,8 +22,6 @@ class Scene3 extends Phaser.Scene {
 		pointsTable += "GREEN: " + this.greenScore + "\n";
 		pointsTable += "YELLOW: " + this.yellowScore + "\n";
 		this.add.text(20 * scaling_parameter, 40 * scaling_parameter, pointsTable);
-
-		// this.scene.start("playGame");
 	}
 
 }
