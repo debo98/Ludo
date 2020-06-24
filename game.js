@@ -1,5 +1,5 @@
-// scaling_parameter = Math.min(Math.min(window.innerWidth/420, window.innerHeight/300), 1);
-scaling_parameter = 1;
+scaling_parameter = Math.min(Math.min(window.innerWidth/420, window.innerHeight/300), 1);
+// scaling_parameter = 1;
 
 var config = {
 	width: scaling_parameter*421,
