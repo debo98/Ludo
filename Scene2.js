@@ -7,7 +7,8 @@ class Scene2 extends Phaser.Scene {
 		super("playGame");
 		
 		this.turn = "red";
-		this.change_turn = true;
+		this.turns_left = 1;
+		this.consecutive_sixes = 0;
 		
 		this.redScore = 0;
 		this.blueScore = 0;
@@ -285,56 +286,114 @@ class Scene2 extends Phaser.Scene {
 	move(pointer, gameObject) {
 
 		if(gameObject.getData("type") == "dice" && this.dice.getData("active") == true){
+			this.turns_left -= 1;
 			var dice_roll = Phaser.Math.Between(1, 6);
 			this.dice.input.enable = false;
 			this.dice.visible = false;
 			switch(dice_roll){
-				case 1: this.dice = this.dice1; this.change_turn = true; break;
-				case 2: this.dice = this.dice2; this.change_turn = true; break;
-				case 3: this.dice = this.dice3; this.change_turn = true; break;
-				case 4: this.dice = this.dice4; this.change_turn = true; break;
-				case 5: this.dice = this.dice5; this.change_turn = true; break;
-				case 6: this.dice = this.dice6; this.change_turn = false; break;
+				case 1: this.dice = this.dice1; this.consecutive_sixes = 0; break;
+				case 2: this.dice = this.dice2; this.consecutive_sixes = 0; break;
+				case 3: this.dice = this.dice3; this.consecutive_sixes = 0; break;
+				case 4: this.dice = this.dice4; this.consecutive_sixes = 0; break;
+				case 5: this.dice = this.dice5; this.consecutive_sixes = 0; break;
+				case 6: this.dice = this.dice6; this.turns_left += 1; this.consecutive_sixes += 1; break;
 			}
-			this.dice.input.enable = true;
-			this.dice.visible = true;
-			this.dice.setData("active", false);
-
-			// TODO: IF CANNOT MOVE, GO TO DICE ROLL
-			// TODO: IF CLICKED WRONG PIECE, DO NOT SKIP TURN
-			// TODO: 2 PIECES TOGETHER SHOULD BE CONSIDERED SAFE
-			// TODO: CANNOT CLICK PIECES IF OTHER COLORS ARE THERE. Y > G > B > R
-			// TODO: BLUE ENTERING HOME (LAST) PHASE GETS EXTRA TURN FOR SOME REASON
 
 			console.log("Dice was rolled. Value: ", this.dice.getData("facevalue"), " Turn: ", this.turn)
+			console.log(this.consecutive_sixes);
+
+			if(this.consecutive_sixes == 3){
+				this.consecutive_sixes = 0;
+				this.turns_left = 0;
+				this.switch_turns();
+			}
+			else{
+				this.dice.setData("active", false);
+				if(this.can_move() == false){
+					this.switch_turns();		
+				}
+			}
+
+			this.dice.input.enable = true;
+			this.dice.visible = true;
 		}
 		
 		else if(gameObject.getData("type") == "piece"){
 			if(this.dice.getData("active") == false && gameObject.getData("color") == this.turn){
-				var pos = this.move_piece(gameObject);
+				var [status, pos] = this.move_piece(gameObject);
 				if(pos > 0 && pos < 73){
 					gameObject.setData("pos", pos);
 					[gameObject.x, gameObject.y] = this.get_new_position(pos);
 					[gameObject.x, gameObject.y] = [scaling_parameter * gameObject.x, scaling_parameter * gameObject.y]
 				}
-				this.dice.setData("active", true);
-				if(this.change_turn == true){
-					switch(this.turn){
-						case "red": this.turn = "blue"; break;
-						case "blue": this.turn = "green"; break;
-						case "green": this.turn = "yellow"; break;
-						case "yellow": this.turn = "red"; break;
-					}
+				if(status == "moved"){
+					this.switch_turns();
 				}
+
 			}
 		}
 		
 	}
 
+	switch_turns() {
+		this.dice.setData("active", true);	
+		if(this.turns_left == 0){
+			switch(this.turn){
+				case "red": this.turn = "blue"; break;
+				case "blue": this.turn = "yellow"; break;
+				case "yellow": this.turn = "green"; break;
+				case "green": this.turn = "red"; break;
+			}
+			this.turns_left = 1;
+		}	
+	}
 
+	can_move() {
+		var allpieces = [
+			this.red1, this.red2, this.red3, this.red4,
+			this.blue1, this.blue2, this.blue3, this.blue4,
+			this.green1, this.green2, this.green3, this.green4,
+			this.yellow1, this.yellow2, this.yellow3, this.yellow4
+		];
+
+		var cantmove = 0;
+		for(var i=0; i < 16; i+=1) {
+			if(allpieces[i].getData("color") == this.turn) {
+				if(allpieces[i].getData("pos") == 0 && this.dice.getData("facevalue") != 6) {
+					cantmove += 1;
+					continue;
+				}
+				
+				switch(this.turn){
+					case "red": if(allpieces[i].getData("pos") + this.dice.getData("facevalue") > 58) cantmove += 1; break;
+					case "blue": if(allpieces[i].getData("pos") + this.dice.getData("facevalue") > 73) cantmove += 1; break;
+					case "green": if(allpieces[i].getData("pos") + this.dice.getData("facevalue") > 63) cantmove += 1; break;
+					case "yellow": if(allpieces[i].getData("pos") + this.dice.getData("facevalue") > 68) cantmove += 1; break;
+				}
+
+			}
+		}
+		
+		var score;
+		switch(this.turn){
+			case "red": score = this.redScore; break;
+			case "blue": score = this.blueScore; break;
+			case "green": score = this.greenScore; break;
+			case "yellow": score = this.yellowScore; break;
+		}
+
+		if(score + cantmove < 4){
+			return true;
+		}
+		else{
+			return false;
+		}
+
+	}
 
 	move_piece(gameObject) {
 		var pos = gameObject.getData("pos");
+		var inititalpos = pos;
 		if(pos == 0 && this.dice.getData("facevalue") == 6){
 			switch(gameObject.getData("color")) {
 				case "red": pos = 1; break;
@@ -353,7 +412,7 @@ class Scene2 extends Phaser.Scene {
 			}
 			if(pos == 58) {
 				this.redScore += 1;
-				this.change_turn = false;
+				this.turns_left += 1;
 				if(this.redScore == 4){
 					this.scene.start("gameOver", {
 						redScore: this.redScore, 
@@ -382,7 +441,7 @@ class Scene2 extends Phaser.Scene {
 			}
 			if(pos == 73) {
 				this.blueScore += 1;
-				this.change_turn = false;
+				this.turns_left += 1;
 				if(this.blueScore == 4) {
 					this.scene.start("gameOver", {
 						redScore: this.redScore, 
@@ -411,7 +470,7 @@ class Scene2 extends Phaser.Scene {
 			}
 			if(pos == 63){
 				this.greenScore += 1;
-				this.change_turn = false;
+				this.turns_left += 1;
 				if(this.greenScore == 4) {
 					this.scene.start("gameOver", {
 						redScore: this.redScore, 
@@ -440,7 +499,7 @@ class Scene2 extends Phaser.Scene {
 			}
 			if(pos == 68){
 				this.yellowScore += 1;
-				this.change_turn = false;
+				this.turns_left += 1;
 				if(this.yellowScore == 4){
 					this.scene.start("gameOver", {
 						redScore: this.redScore, 
@@ -469,7 +528,12 @@ class Scene2 extends Phaser.Scene {
 
 		this.check_cut(gameObject, pos);
 
-		return pos;
+		if(pos == inititalpos){
+			return ["did not move", pos]; 
+		}
+		else{
+			return ["moved", pos];
+		}
 	}
 
 	get_new_position(location) {
@@ -554,335 +618,139 @@ class Scene2 extends Phaser.Scene {
 	}
 
 	check_cut(gameObject, location) {
-		if(this.is_safe(location) == false){
+		var allpieces = [
+			this.red1, this.red2, this.red3, this.red4,
+			this.blue1, this.blue2, this.blue3, this.blue4,
+			this.green1, this.green2, this.green3, this.green4,
+			this.yellow1, this.yellow2, this.yellow3, this.yellow4
+		];
+		var count_safe = 0;
+		var cut_any = false;
 
-			// RED
+		var safecolor = new Set([gameObject.getData("color")]);
+		for(var i=0; i < 16; i+=1){
+			if(allpieces[i].getData("pos") == location){
+				for(var j = 0; j < 16; j+=1){
+					if(allpieces[j].getData("pos")== location && i != j && allpieces[j].getData("color") == allpieces[i].getData("color")){
+						safecolor.add(allpieces[i].getData("color"));
+					}
+				}
+			}
+		}
 
-			if(gameObject.getData("color") == "red") {
-
-				if(this.blue1.getData("pos") == location){
-					this.blue1.setData("pos", 0);
-					this.blue1.x = 45*scaling_parameter;
-					this.blue1.y = 218*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.blue2.getData("pos") == location){
-					this.blue2.setData("pos", 0);
-					this.blue2.x = 80*scaling_parameter;
-					this.blue2.y = 218*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.blue3.getData("pos") == location){
-					this.blue3.setData("pos", 0);
-					this.blue3.x = 45*scaling_parameter
-					this.blue3.y = 253*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.blue4.getData("pos") == location){
-					this.blue4.setData("pos", 0);
-					this.blue4.x = 80*scaling_parameter;
-					this.blue4.y = 253*scaling_parameter;
-					this.change_turn = false;
-				}
-
-				if(this.green1.getData("pos") == location){
-					this.green1.setData("pos", 0);
-					this.green1.x = 218*scaling_parameter;
-					this.green1.y = 45*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.green2.getData("pos") == location){
-					this.green2.setData("pos", 0);
-					this.green2.x = 218*scaling_parameter;
-					this.green2.y = 80*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.green3.getData("pos") == location){
-					this.green3.setData("pos", 0);
-					this.green3.x = 253*scaling_parameter
-					this.green3.y = 45*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.green4.getData("pos") == location){
-					this.green4.setData("pos", 0);
-					this.green4.x = 253*scaling_parameter;
-					this.green4.y = 80*scaling_parameter;
-					this.change_turn = false;
-				}
-
-				if(this.yellow1.getData("pos") == location){
-					this.yellow1.setData("pos", 0);
-					this.yellow1.x = 218*scaling_parameter;
-					this.yellow1.y = 218*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.yellow2.getData("pos") == location){
-					this.yellow2.setData("pos", 0);
-					this.yellow2.x = 218*scaling_parameter;
-					this.yellow2.y = 252*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.yellow3.getData("pos") == location){
-					this.yellow3.setData("pos", 0);
-					this.yellow3.x = 253*scaling_parameter
-					this.yellow3.y = 218*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.yellow4.getData("pos") == location){
-					this.yellow4.setData("pos", 0);
-					this.yellow4.x = 253*scaling_parameter;
-					this.yellow4.y = 253*scaling_parameter;
-					this.change_turn = false;
-				}
-
+		for(var i=0; i < 16; i+=1){
+			if(gameObject == allpieces[i]) {
+				count_safe += 1;
+				continue;
 			}
 
-			// BLUE
-
-			else if(gameObject.getData("color") == "blue") {
-
-				if(this.red1.getData("pos") == location){
-					this.red1.setData("pos", 0);
-					this.red1.x = 45*scaling_parameter;
-					this.red1.y = 45*scaling_parameter;
-					this.change_turn = false;
+			if(allpieces[i].getData("pos") == location) {
+				if(this.is_safe(location) == true || safecolor.has(allpieces[i].getData("color")) == true) {
+					count_safe += 1;
 				}
-				if(this.red2.getData("pos") == location){
-					this.red2.setData("pos", 0);
-					this.red2.x = 45*scaling_parameter;
-					this.red2.y = 80*scaling_parameter;
-					this.change_turn = false;
+				else{
+					this.gohome(allpieces[i]);
+					cut_any = true;
 				}
-				if(this.red3.getData("pos") == location){
-					this.red3.setData("pos", 0);
-					this.red3.x = 80*scaling_parameter
-					this.red3.y = 45*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.red4.getData("pos") == location){
-					this.red4.setData("pos", 0);
-					this.red4.x = 80*scaling_parameter;
-					this.red4.y = 80*scaling_parameter;
-					this.change_turn = false;
-				}
-
-				if(this.green1.getData("pos") == location){
-					this.green1.setData("pos", 0);
-					this.green1.x = 218*scaling_parameter;
-					this.green1.y = 45*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.green2.getData("pos") == location){
-					this.green2.setData("pos", 0);
-					this.green2.x = 218*scaling_parameter;
-					this.green2.y = 80*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.green3.getData("pos") == location){
-					this.green3.setData("pos", 0);
-					this.green3.x = 253*scaling_parameter
-					this.green3.y = 45*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.green4.getData("pos") == location){
-					this.green4.setData("pos", 0);
-					this.green4.x = 253*scaling_parameter;
-					this.green4.y = 80*scaling_parameter;
-					this.change_turn = false;
-				}
-
-				if(this.yellow1.getData("pos") == location){
-					this.yellow1.setData("pos", 0);
-					this.yellow1.x = 218*scaling_parameter;
-					this.yellow1.y = 218*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.yellow2.getData("pos") == location){
-					this.yellow2.setData("pos", 0);
-					this.yellow2.x = 218*scaling_parameter;
-					this.yellow2.y = 252*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.yellow3.getData("pos") == location){
-					this.yellow3.setData("pos", 0);
-					this.yellow3.x = 253*scaling_parameter
-					this.yellow3.y = 218*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.yellow4.getData("pos") == location){
-					this.yellow4.setData("pos", 0);
-					this.yellow4.x = 253*scaling_parameter;
-					this.yellow4.y = 253*scaling_parameter;
-					this.change_turn = false;
-				}
-
 			}
-
-			// GREEN
-
-			else if(gameObject.getData("color") == "green") {
-
-				if(this.red1.getData("pos") == location){
-					this.red1.setData("pos", 0);
-					this.red1.x = 45*scaling_parameter;
-					this.red1.y = 45*scaling_parameter;
-			
-			this.change_turn = false;	}
-				if(this.red2.getData("pos") == location){
-					this.red2.setData("pos", 0);
-					this.red2.x = 45*scaling_parameter;
-					this.red2.y = 80*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.red3.getData("pos") == location){
-					this.red3.setData("pos", 0);
-					this.red3.x = 80*scaling_parameter
-					this.red3.y = 45*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.red4.getData("pos") == location){
-					this.red4.setData("pos", 0);
-					this.red4.x = 80*scaling_parameter;
-					this.red4.y = 80*scaling_parameter;
-					this.change_turn = false;
-				}
-
-				if(this.blue1.getData("pos") == location){
-					this.blue1.setData("pos", 0);
-					this.blue1.x = 45*scaling_parameter;
-					this.blue1.y = 218*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.blue2.getData("pos") == location){
-					this.blue2.setData("pos", 0);
-					this.blue2.x = 80*scaling_parameter;
-					this.blue2.y = 218*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.blue3.getData("pos") == location){
-					this.blue3.setData("pos", 0);
-					this.blue3.x = 45*scaling_parameter
-					this.blue3.y = 253*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.blue4.getData("pos") == location){
-					this.blue4.setData("pos", 0);
-					this.blue4.x = 80*scaling_parameter;
-					this.blue4.y = 253*scaling_parameter;
-					this.change_turn = false;
-				}
-
-				if(this.yellow1.getData("pos") == location){
-					this.yellow1.setData("pos", 0);
-					this.yellow1.x = 218*scaling_parameter;
-					this.yellow1.y = 218*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.yellow2.getData("pos") == location){
-					this.yellow2.setData("pos", 0);
-					this.yellow2.x = 218*scaling_parameter;
-					this.yellow2.y = 252*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.yellow3.getData("pos") == location){
-					this.yellow3.setData("pos", 0);
-					this.yellow3.x = 253*scaling_parameter
-					this.yellow3.y = 218*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.yellow4.getData("pos") == location){
-					this.yellow4.setData("pos", 0);
-					this.yellow4.x = 253*scaling_parameter;
-					this.yellow4.y = 253*scaling_parameter;
-					this.change_turn = false;
-				}
-
-			}
-
-			// YELLOW
-
-			else if(gameObject.getData("color") == "yellow") {
-
-				if(this.red1.getData("pos") == location){
-					this.red1.setData("pos", 0);
-					this.red1.x = 45*scaling_parameter;
-					this.red1.y = 45*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.red2.getData("pos") == location){
-					this.red2.setData("pos", 0);
-					this.red2.x = 45*scaling_parameter;
-					this.red2.y = 80*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.red3.getData("pos") == location){
-					this.red3.setData("pos", 0);
-					this.red3.x = 80*scaling_parameter
-					this.red3.y = 45*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.red4.getData("pos") == location){
-					this.red4.setData("pos", 0);
-					this.red4.x = 80*scaling_parameter;
-					this.red4.y = 80*scaling_parameter;
-					this.change_turn = false;
-				}
-
-				if(this.blue1.getData("pos") == location){
-					this.blue1.setData("pos", 0);
-					this.blue1.x = 45*scaling_parameter;
-					this.blue1.y = 218*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.blue2.getData("pos") == location){
-					this.blue2.setData("pos", 0);
-					this.blue2.x = 80*scaling_parameter;
-					this.blue2.y = 218*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.blue3.getData("pos") == location){
-					this.blue3.setData("pos", 0);
-					this.blue3.x = 45*scaling_parameter
-					this.blue3.y = 253*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.blue4.getData("pos") == location){
-					this.blue4.setData("pos", 0);
-					this.blue4.x = 80*scaling_parameter;
-					this.blue4.y = 253*scaling_parameter;
-					this.change_turn = false;
-				}
-
-				if(this.green1.getData("pos") == location){
-					this.green1.setData("pos", 0);
-					this.green1.x = 218*scaling_parameter;
-					this.green1.y = 45*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.green2.getData("pos") == location){
-					this.green2.setData("pos", 0);
-					this.green2.x = 218*scaling_parameter;
-					this.green2.y = 80*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.green3.getData("pos") == location){
-					this.green3.setData("pos", 0);
-					this.green3.x = 253*scaling_parameter
-					this.green3.y = 45*scaling_parameter;
-					this.change_turn = false;
-				}
-				if(this.green4.getData("pos") == location){
-					this.green4.setData("pos", 0);
-					this.green4.x = 253*scaling_parameter;
-					this.green4.y = 80*scaling_parameter;
-					this.change_turn = false;
-				}
-
-			}
-
-
 
 		}
+
+		if(cut_any == true){
+			this.turns_left += 1;
+		}
+
+
+		var row = Math.ceil(Math.sqrt(count_safe));
+		var col = row;
+		var firstsquare = this.get_new_position(location);
+		if(location == 0){
+			return;
+		}
+		firstsquare[0] -= 9.55;
+		firstsquare[1] -= 9.55;
+		firstsquare[0] += 19.1/(2*row);
+		firstsquare[1] += 19.1/(2*col);
+		var j = 0, k = 0;
+		for(var i=0; i < 16; i+=1){
+			if(allpieces[i].getData("pos") == location){
+				this.place(allpieces[i], firstsquare[0] + j*19.1/row, firstsquare[1] + k*19.1/col, scaling_parameter/(row*col));
+				k += 1;
+				if(k == col){
+					k = 0;
+					j+= 1;
+				}
+			}
+		}
+
+	}
+
+	gohome(piece){
+		piece.setData("pos", 0);
+		var xCoord, yCoord;
+
+		// RED
+		if(piece == this.red1){
+			xCoord = 45; yCoord = 45;
+		}
+		else if(piece == this.red2){
+			xCoord = 45; yCoord = 80;
+		}
+		else if(piece == this.red3){
+			xCoord = 80; yCoord = 45;
+		}
+		else if(piece == this.red4){
+			xCoord = 80; yCoord = 80;
+		}
+
+		// BLUE
+		else if(piece == this.blue1){
+			xCoord = 45; yCoord = 218;
+		}
+		else if(piece == this.blue2){
+			xCoord = 80; yCoord = 218;
+		}
+		else if(piece == this.blue3){
+			xCoord = 45; yCoord = 253;
+		}
+		else if(piece == this.blue4){
+			xCoord = 80; yCoord = 253;
+		}
+
+		// GREEN
+		else if(piece == this.green1){
+			xCoord = 218; yCoord = 45;
+		}
+		else if(piece == this.green2){
+			xCoord = 218; yCoord = 80;
+		}
+		else if(piece == this.green3){
+			xCoord = 253; yCoord = 45;
+		}
+		else if(piece == this.green4){
+			xCoord = 253; yCoord = 80;
+		}
+
+		// YELLOW
+		else if(piece == this.yellow1){
+			xCoord = 218; yCoord = 218;
+		}
+		else if(piece == this.yellow2){
+			xCoord = 218; yCoord = 253;
+		}
+		else if(piece == this.yellow3){
+			xCoord = 253; yCoord = 218;
+		}
+		else if(piece == this.yellow4){
+			xCoord = 253; yCoord = 253;
+		}
+
+		this.place(piece, xCoord, yCoord, scaling_parameter);
+	}
+
+	place(piece, xCoord, yCoord, scale){
+		piece.x = xCoord * scaling_parameter;
+		piece.y = yCoord * scaling_parameter;
 	}
 
 	is_safe(location) {
@@ -896,7 +764,6 @@ class Scene2 extends Phaser.Scene {
 			case 35: return true;
 			case 40: return true;
 			case 48: return true;
-			case 73: return true;
 			default: return false;
 		}
 	}
