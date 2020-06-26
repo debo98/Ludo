@@ -728,12 +728,14 @@ class Scene2 extends Phaser.Scene {
         }
 
 
-        var row = Math.ceil(Math.sqrt(count_safe));
-        var col = row;
-        var firstsquare = this.get_new_position(location);
-        if (location == 0) {
+        if (location == 0 || location == 58 || location == 63 || location == 68 || location == 73) {
             return;
         }
+
+        var row = Math.ceil(Math.sqrt(count_safe));
+        var col = row;
+        console.log(location);
+        var firstsquare = this.get_new_position(location);
         firstsquare[0] -= 9.55;
         firstsquare[1] -= 9.55;
         firstsquare[0] += 19.1 / (2 * row);
